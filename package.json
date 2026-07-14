@@ -1,0 +1,9 @@
+{
+  "name": "hellcastle-rating",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "backblaze-b2": "^1.7.0"
+  }
+}
