@@ -913,13 +913,13 @@
 
   <footer class="footer">
     <div class="wrap">
-      Hellcastle Rating (HR) — baseline 1000. Ratings are stored in Sheety online storage with local fallback if sync fails.
+      Hellcastle Rating (HR) — baseline 1000. Ratings are stored in Backblaze B2 online storage with local fallback if sync fails.
     </div>
   </footer>
 
   <script>
     const STORAGE_KEY = 'hellcastle-rating-app-v1';
-    const ONLINE_STORAGE_URL = 'https://api.matches';
+    const ONLINE_STORAGE_URL = '/api/matches';
     const ONLINE_STORAGE_HEADERS = {
       'Content-Type': 'application/json'
     };
@@ -1032,40 +1032,21 @@
         }
 
         const payload = await response.json();
-        const rows = Array.isArray(payload?.matches) ? payload.matches : [];
+        const normalized = normalizeState(payload);
 
-        if(rows.length === 0){
+        if(normalized.matches.length === 0 && Object.keys(normalized.players).length === 0){
           state = normalizeState(localFallback);
           usingOnlineStorage = false;
-          setStorageStatus('Online storage reachable, no remote rows found. Using local data.');
+          setStorageStatus('Online storage reachable, no remote data found. Using local data.');
           return;
         }
 
-        const latest = rows
-          .map(row => {
-            if(!row || typeof row !== 'object') return null;
-            if(!row.stateJson) return null;
-            try{
-              return JSON.parse(row.stateJson);
-            }catch(err){
-              return null;
-            }
-          })
-          .filter(Boolean)
-          .pop();
-
-        if(latest){
-          state = normalizeState(latest);
-          usingOnlineStorage = true;
-          saveLocalState(state);
-          setStorageStatus('Connected to online storage (Sheety).');
-        }else{
-          state = normalizeState(localFallback);
-          usingOnlineStorage = false;
-          setStorageStatus('Online rows were unreadable. Using local storage fallback.');
-        }
+        state = normalized;
+        usingOnlineStorage = true;
+        saveLocalState(state);
+        setStorageStatus('Connected to online storage (Backblaze B2).');
       }catch(error){
-        console.error('Error loading Sheety data:', error);
+        console.error('Error loading B2 data:', error);
         state = normalizeState(localFallback);
         usingOnlineStorage = false;
         setStorageStatus('Offline mode (local storage fallback).');
@@ -1076,12 +1057,7 @@
       saveLocalState(state);
 
       try{
-        const body = {
-          match: {
-            stateJson: JSON.stringify(normalizeState(state)),
-            savedAt: new Date().toISOString()
-          }
-        };
+        const body = normalizeState(state);
 
         const response = await fetchWithTimeout(ONLINE_STORAGE_URL, {
           method: 'POST',
@@ -1097,7 +1073,7 @@
         setStorageStatus('Saved locally + synced to online storage.');
       }catch(error){
         usingOnlineStorage = false;
-        console.error('Error saving Sheety data:', error);
+        console.error('Error saving B2 data:', error);
         setStorageStatus('Saved locally (online sync failed).');
       }
     }
